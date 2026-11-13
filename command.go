@@ -28,7 +28,7 @@ var commandLexer = lexer.MustSimple([]lexer.SimpleRule{
 
 //region Command, Args
 
-type сommand struct {
+type command struct {
 	Name string `parser:"@Command"`
 	Args []*Arg `parser:"@@*"`
 }
@@ -101,7 +101,7 @@ func (a *Arg) ToFloat64() *float64 {
 
 //region Parsing
 
-var parserCommand = participle.MustBuild[сommand](
+var parserCommand = participle.MustBuild[command](
 	participle.Lexer(commandLexer),
 	participle.Elide("Whitespace"),
 )
