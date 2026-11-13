@@ -13,6 +13,7 @@ import (
 
 var commandLexer = lexer.MustSimple([]lexer.SimpleRule{
 	{Name: "Command", Pattern: `/[a-zA-Z_][a-zA-Z0-9_]*`},
+	{Name: "URL", Pattern: "`([a-zA-Z][a-zA-Z0-9+.-]*://)?(([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}|\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|\\[[0-9a-fA-F:]+\\])(:\\d{1,5})?(/[^\\s`]*)?`"},
 	{Name: "Address", Pattern: `\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d{1,5})?`},
 	{Name: "String", Pattern: `'[^']*'|"[^"]*"`},
 	{Name: "List", Pattern: `[a-zA-Z0-9_-]+(\|[a-zA-Z0-9_-]+)+`},
@@ -27,25 +28,26 @@ var commandLexer = lexer.MustSimple([]lexer.SimpleRule{
 
 //region Command, Args
 
-type command struct {
+type сommand struct {
 	Name string `parser:"@Command"`
 	Args []*Arg `parser:"@@*"`
 }
 
 type Command struct {
-	ID   string
-	Name string
-	Args []*Arg
+	ID   string `json:"ID"`
+	Name string `json:"Name"`
+	Args []*Arg `json:"Args"`
 }
 
 type Arg struct {
-	Ident  string `parser:"@Ident"` //! Ident is a fallback for unrecognized arguments.
-	Str    string `parser:"| @String"`
-	Addr   string `parser:"| @Address"`
-	List   string `parser:"| @List"`
-	ID     string `parser:"| @ID"`
-	Key    string `parser:"| @Key"`
-	Number string `parser:"| @Number"`
+	Ident  string `parser:"@Ident"  json:"Ident"` //! Ident is a fallback for unrecognized arguments.
+	Str    string `parser:"| @String" json:"Str"`
+	URL    string `parser:"| @URL" json:"URL"`
+	Addr   string `parser:"| @Address" json:"Addr"`
+	List   string `parser:"| @List"    json:"List"`
+	ID     string `parser:"| @ID"      json:"ID"`
+	Key    string `parser:"| @Key"     json:"Key"`
+	Number string `parser:"| @Number"  json:"Number"`
 }
 
 //endregion
@@ -58,6 +60,9 @@ func (a *Arg) Value() string {
 	}
 	if a.Str != "" {
 		return strings.Trim(a.Str, `"'`)
+	}
+	if a.URL != "" {
+		return strings.Trim(a.URL, "`")
 	}
 	if a.Addr != "" {
 		return a.Addr
@@ -96,7 +101,7 @@ func (a *Arg) ToFloat64() *float64 {
 
 //region Parsing
 
-var parserCommand = participle.MustBuild[command](
+var parserCommand = participle.MustBuild[сommand](
 	participle.Lexer(commandLexer),
 	participle.Elide("Whitespace"),
 )

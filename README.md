@@ -1,82 +1,81 @@
 # KCommandParser
 
-A package for parsing command and program strings: converts text into `Command` or `Program`. Provides a strategy detection mechanism via `Detect`, as well as a common `Response` format for executors.
+Пакет для разбора строк команд и программ: превращает текст в `Command` или `Program`. Предоставляет механизм определения стратегии через `Detect`, а также общий формат ответа `Response` для исполнителей.
 
-## Parsing strategy selection
+## Выбор стратегии разбора
 
-The `Detect` function determines the input type and returns a `DetectStrategy`: `InputCommand`, `InputProgram`, or `InputUnknown`.
+Функция `Detect` определяет тип ввода и возвращает `DetectStrategy`: `InputCommand`, `InputProgram` или `InputUnknown`.
 
-Checks are performed sequentially:
+Проверка выполняется последовательно:
 
-1. Empty string → `InputUnknown`.
-2. Prefix `%>`, `%&`, or `%!` → `InputProgram`.
-3. Presence of `~>` → `InputUnknown` (a program without a tag is not supported).
-4. Prefix `/` → `InputCommand`.
-5. Otherwise → `InputUnknown`.
+1. Пустая строка → `InputUnknown`.
+2. Префикс `%>`, `%&` или `%!` → `InputProgram`.
+3. Наличие `~>` → `InputUnknown` (программа без тега не поддерживается).
+4. Префикс `/` → `InputCommand`.
+5. Иначе → `InputUnknown`.
 
-Scenarios:
+Сценарии:
 
-| Input | Result | Comment |
+| Ввод | Результат | Комментарий |
 |---|---|---|
-| `/ping` | `InputCommand` | Valid command |
-| `%> /ping ~> /status` | `InputProgram` | Program with a tag |
-| `%!5%& /ping` | `InputProgram` | Program with a tag and counter |
-| `/d ~> /c` | `InputUnknown` | Has `~>`, but no tag — neither command nor program |
-| `hello` | `InputUnknown` | Not a command and not a program |
-| `` (empty) | `InputUnknown` | Empty input |
+| `/ping` | `InputCommand` | Корректная команда |
+| `%> /ping ~> /status` | `InputProgram` | Программа с тегом |
+| `%!5%& /ping` | `InputProgram` | Программа с тегом и счётчиком |
+| `/d ~> /c` | `InputUnknown` | Есть `~>`, но нет тега — ни команда, ни программа |
+| `hello` | `InputUnknown` | Не команда и не программа |
+| `` (пусто) | `InputUnknown` | Пустой ввод |
 
-## Structures
+## Структуры
 
-### Command
+### Команда
 
-A parsing unit obtained from a string like `/name arg1 arg2`. Created by `ParseCommand`, which assigns a unique `ID`.
+Единица разбора, полученная из строки вида `/name arg1 arg2`. Создаётся функцией `ParseCommand`, при этом назначается уникальный `ID`.
 
-| Name | Type | Description |
+| Название | Тип | Описание |
 |---|---|---|
-| `ID` | `string` | Unique command identifier (UUID) |
-| `Name` | `string` | Command name, e.g. `/ping` |
-| `Args` | `[]*Arg` | Command arguments |
+| `ID` | `string` | Уникальный идентификатор команды (UUID) |
+| `Name` | `string` | Имя команды, например `/ping` |
+| `Args` | `[]*Arg` | Аргументы команды |
 
-> A command can be converted to a program using `Convert`. It creates a `Program` with mode `seq`, count `1`, and a body consisting of the single passed command. This is useful when an executor expects a single `Program` type, but a single command was received as input.
+> Команду можно преобразовать в программу с помощью функции `Convert`. Она создаёт `Program` с режимом `seq`, счётчиком `1` и телом из одной переданной команды. Это удобно, когда исполнитель ожидает единый тип `Program`, а на вход пришла одиночная команда.
 
-### Argument
+### Аргумент
 
-A single command argument. The specific type is determined by the lexer; `Ident` is used for unrecognized values.
+Один аргумент команды. Конкретный тип определяется лексером; для нераспознанных значений используется `Ident`. Значение извлекается методом `Value`; список разбирается методом `SplitList`; число приводится методом `ToFloat64`.
 
-| Name | Type | Description |
+| Название | Тип | Raw → Value() | Описание |
+|---|---|---|---|
+| `Ident` | `string` | `arg` → `arg` | Fallback для нераспознанных аргументов |
+| `Str` | `string` | `'text'` → `text` | Строка в кавычках |
+| `URL` | `string` | `` `http://example.com/p` `` → `http://example.com/p` | URL в бэктиках: хост, IP или IPv6, опционально схема, порт и путь |
+| `Addr` | `string` | `10.0.0.1:80` → `10.0.0.1:80` | IP-адрес с опциональным портом |
+| `List` | `string` | `a\|b\|c` → `a\|b\|c` | Список через `\|` |
+| `ID` | `string` | `$name` → `name` | Идентификатор вида `$name` |
+| `Key` | `string` | `-name` → `-name` | Ключ вида `-name` |
+| `Number` | `string` | `-42` → `-42` | Число (в том числе дробное и отрицательное) |
+
+### Программа
+
+Последовательность команд с тегом. Создаётся функцией `ParseProgram`; тело делится по `~>`.
+
+| Название | Тип | Описание |
 |---|---|---|
-| `Ident` | `string` | Fallback for unrecognized arguments |
-| `Str` | `string` | Quoted string |
-| `Addr` | `string` | IP address with optional port |
-| `List` | `string` | List separated by `\|` |
-| `ID` | `string` | Identifier like `$name` |
-| `Key` | `string` | Key like `-name` |
-| `Number` | `string` | Number (including fractional and negative) |
+| `Mode` | `ProgramMode` | Режим выполнения: `seq` или `par` |
+| `Count` | `int` | Счётчик повторов (по умолчанию 1) |
+| `Body` | `[]*Command` | Команды программы |
 
-The argument value is extracted by `Value`; the list is split by `SplitList`; the number is converted by `ToFloat64`.
+### Ответ
 
-### Program
+Общий формат ответа исполнителя. Создаётся функцией `NewResponse`.
 
-A sequence of commands with a tag. Created by `ParseProgram`; the body is split by `~>`.
-
-| Name | Type | Description |
+| Название | Тип | Описание |
 |---|---|---|
-| `Mode` | `ProgramMode` | Execution mode: `seq` or `par` |
-| `Count` | `int` | Repeat counter (default 1) |
-| `Body` | `[]*Command` | Program commands |
+| `CommandID` | `string` | Идентификатор команды |
+| `Level` | `string` | Уровень ответа |
+| `Time` | `time.Time` | Время создания ответа |
+| `ResponseMessage` | `string` | Текст ответа |
 
-### Response
-
-A common executor response format. Created by `NewResponse`.
-
-| Name | Type | Description |
-|---|---|---|
-| `CommandID` | `string` | Command identifier |
-| `Level` | `string` | Response level |
-| `Time` | `time.Time` | Response creation time |
-| `ResponseMessage` | `string` | Response text |
-
-## Example
+## Пример
 
 ```go
 strategy := Detect("/ping") // InputCommand
@@ -93,7 +92,3 @@ fmt.Println(len(prog.Body)) // 2
 resp := NewResponse(cmd.ID, "info", "ok")
 fmt.Println(resp.Level) // info
 ```
-
----
-
-This documentation is also available in [Russian](./src/docs/README.ru.md).
